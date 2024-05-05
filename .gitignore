@@ -1,0 +1,10 @@
+# Build results
+target/
+artifacts/
+
+# IDEs
+.idea/
+.vscode/
+
+# MacOS
+.DS_Store
