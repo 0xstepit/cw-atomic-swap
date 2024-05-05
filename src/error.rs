@@ -25,5 +25,5 @@ pub enum ContractError {
     SenderIsMaker {},
 
     #[error("unable to encode json")]
-    JsonEncodeError(#[from] serde_json::Error),
+    JsonEncodeError {},
 }

@@ -1,5 +1,5 @@
 use cosmwasm_schema::{cw_serde, QueryResponses};
-use cosmwasm_std::{Addr, Decimal};
+use cosmwasm_std::{Addr, Coin, Decimal};
 
 use crate::state::{Config, SwapOrder};
 
@@ -8,8 +8,6 @@ use crate::state::{Config, SwapOrder};
 pub struct InstantiateMsg {
     /// Owner of the smart contract.
     pub owner: Option<String>,
-    /// Fee deducted from each exchange in bps.
-    pub fee: Decimal,
 }
 
 /// This enum describes available contract's execution messages.
@@ -31,7 +29,7 @@ pub enum ExecuteMsg {
         /// Coin to received.
         coin_out: Coin,
         /// If specified, is the only counterparty accepted in the swap.
-        taker: Option<Addr>,
+        taker: Option<String>,
         /// Timestamp after which the deal expires in seconds.
         timeout: u64,
     },
@@ -54,19 +52,22 @@ pub enum QueryMsg {
     /// Retrieve the market configuration.
     #[returns(Config)]
     Config {},
+    // TODO: in both query below add a flag to specify if
+    // timedout orders are wanted. (how to cancel otherwise?)
     #[returns(AllSwapOrdersResponse)]
-    /// Retrieve all swap orders.
+    /// Retrieve all active swap orders.
     AllSwapOrders {},
-    /// Retrieve swap orders by creator.
-    SwapOrdersByCreator {},
+    #[returns(SwapOrdersByMakerResponse)]
+    /// Retrieve all active swap orders by maker.
+    SwapOrdersByMaker { maker: String },
 }
 
 #[cw_serde]
 pub struct AllSwapOrdersResponse {
-    pub deals: Vec<((Addr, u64), SwapOrder)>,
+    pub orders: Vec<((Addr, u64), SwapOrder)>,
 }
 
 #[cw_serde]
-pub struct SwapOrdersByCreatorReponse {
-    pub deals: Vec<((Addr, u64), SwapOrder)>,
+pub struct SwapOrdersByMakerResponse {
+    pub orders: Vec<(u64, SwapOrder)>,
 }

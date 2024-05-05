@@ -1,6 +1,6 @@
 use cosmwasm_schema::cw_serde;
-use cosmwasm_std::{Addr, Coin, Decimal};
-use cw_storage_plus::Item;
+use cosmwasm_std::{Addr, Coin, Decimal, StdResult, Storage};
+use cw_storage_plus::{Item, Map};
 
 /// This struct contains configuration parameters for the atomic swap market.
 #[cw_serde]
@@ -8,8 +8,6 @@ pub struct Config {
     /// Address of the contract owner. This is the only address
     /// that can modify the `Config`.
     pub owner: Addr,
-    /// Fee deducted from each exchange in percentage.
-    pub fee: Decimal,
 }
 
 /// Contains all information of an order.
@@ -47,4 +45,4 @@ pub fn next_id(store: &mut dyn Storage) -> StdResult<u64> {
 /// Data structure used to store the number of created deals.
 pub const COUNTER: Item<u64> = Item::new("counter");
 pub const CONFIG: Item<Config> = Item::new("config");
-pub const SWAP_ORDERS: Map<u64, SwapOrder> = Map::new("swap_orders");
+pub const SWAP_ORDERS: Map<(&Addr, u64), SwapOrder> = Map::new("swap_orders");
