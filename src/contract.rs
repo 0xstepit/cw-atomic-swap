@@ -42,8 +42,10 @@ pub fn execute(
             taker,
             timeout,
         } => execute::create_swap_order(deps, env, info, coin_in, coin_out, taker, timeout),
-        AcceptSwapOrder { order_id } => unimplemented!(),
-        ConfirmSwapOrder {} => unimplemented!(),
+        AcceptSwapOrder { order_id, maker } => {
+            execute::accept_swap_order(deps, info, env, order_id, maker)
+        }
+        ConfirmSwapOrder { order_id, maker } => unimplemented!(),
     }
 }
 
@@ -60,13 +62,18 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
 }
 
 pub mod execute {
-    use cosmwasm_std::{Coin, StdError};
+    use cosmwasm_std::{Addr, Coin, StdError};
 
     use crate::state::{next_id, OrderStatus, SwapOrder, SWAP_ORDERS};
 
     use super::*;
 
-    /// Crerate a new deal. The deal can be open of specific for one counterparty.
+    /// Create a new atomic swap order.
+    ///
+    /// # Errors
+    ///
+    /// - coins sent to the contract along with the message.
+    /// - coins to swap are not native.
     pub fn create_swap_order(
         deps: DepsMut,
         env: Env,
@@ -78,15 +85,11 @@ pub mod execute {
     ) -> Result<Response, ContractError> {
         let config = CONFIG.load(deps.storage)?;
 
-        if coin_in.denom == coin_out.denom {
-            return Err(ContractError::CoinError {
-                first_coin: coin_in.denom,
-                second_coin: coin_out.denom,
-            });
-        }
-
+        validate_different_denoms(&coin_in.denom, &coin_out.denom)?;
         validate_native_denom(&coin_in.denom)?;
         validate_native_denom(&coin_out.denom)?;
+        validate_coins_number(&info.funds, 0)?;
+
         let taker = taker
             .as_ref()
             .map(|addr| deps.api.addr_validate(addr))
@@ -107,6 +110,86 @@ pub mod execute {
             .add_attribute("action", "create_order")
             .add_attribute("order_id", order_id.to_string())
             .add_attribute("maker", info.sender))
+    }
+
+    // Accept a swap order.
+    //
+    // # Errors
+    //
+    // - more than one coin is sent to the contract.
+    // - sender is equal to matching order maker.
+    // - selected order is not open or timed out.
+    // - sent coin doesn't match maker wanted coin.
+    // - sender is not the specified taker if specified.
+    pub fn accept_swap_order(
+        deps: DepsMut,
+        info: MessageInfo,
+        env: Env,
+        order_id: u64,
+        maker: String,
+    ) -> Result<Response, ContractError> {
+        validate_coins_number(&info.funds, 1)?;
+
+        // We don't care about validation because the address is not stored.
+        let maker = Addr::unchecked(maker);
+        if info.sender == maker {
+            return Err(ContractError::SenderIsMaker {});
+        }
+        let mut order = SWAP_ORDERS.load(deps.storage, (&maker, order_id))?;
+
+        // Return error if the order is expired or already matched.
+        if order.status != OrderStatus::Open || order.timeout < env.block.time.seconds() {
+            return Err(ContractError::SwapOrderNotAvailable {});
+        }
+
+        // Check if sent coins are the same of the selected order.
+        if order.coin_out != info.funds[0] {
+            return Err(ContractError::WrongCoin {
+                denom: order.coin_out.denom.clone(),
+                amount: order.coin_out.amount,
+            });
+        }
+
+        // Check if the deal is reserved and sender is not the lucky one.
+        if let Some(taker) = order.taker {
+            if taker != info.sender {
+                return Err(ContractError::Unauthorized {});
+            }
+        }
+
+        order.taker = Some(info.sender);
+        order.status = OrderStatus::Matched;
+
+        SWAP_ORDERS.save(deps.storage, (&maker, order_id), &order)?;
+
+        Ok(Response::new()
+            .add_attribute("action", "match_order")
+            .add_attribute("order_taker", order.taker.unwrap()))
+    }
+
+    /// Check that only one coin has been sent to the contract.
+    pub fn validate_different_denoms(
+        denom_in: &String,
+        denom_out: &String,
+    ) -> Result<(), ContractError> {
+        if denom_in == denom_out {
+            return Err(ContractError::CoinError {
+                first_coin: denom_in.to_string(),
+                second_coin: denom_out.to_string(),
+            });
+        }
+        Ok(())
+    }
+
+    /// Check that only one coin has been sent to the contract.
+    pub fn validate_coins_number(funds: &[Coin], allowed_number: u64) -> Result<(), ContractError> {
+        if funds.len() as u64 != allowed_number {
+            return Err(ContractError::FundsError {
+                accepted: allowed_number,
+                received: funds.len() as u64,
+            });
+        }
+        Ok(())
     }
 
     /// Taken from https://github.com/mars-protocol/red-bank/blob/5bb0fe145588352b281803f7b870103bc6832621/packages/utils/src/helpers.rs#L68
@@ -208,10 +291,10 @@ mod tests {
 
     use cosmwasm_std::{
         testing::{mock_dependencies, mock_env, mock_info},
-        Addr,
+        Addr, Coin, Uint128,
     };
 
-    use common::market::InstantiateMsg;
+    use self::tests::execute::validate_coins_number;
 
     use super::*;
 
@@ -236,5 +319,28 @@ mod tests {
             owner: Addr::unchecked("stepit"),
         };
         assert_eq!(expected_config, config, "expected different config")
+    }
+
+    #[test]
+    fn test_validate_coins_number() {
+        let funds = vec![Coin {
+            denom: "foo".to_string(),
+            amount: Uint128::new(100),
+        }];
+        let result = validate_coins_number(&funds, 1);
+        assert!(result.is_ok());
+
+        let funds = vec![
+            Coin {
+                denom: "foo".to_string(),
+                amount: Uint128::new(100),
+            },
+            Coin {
+                denom: "bar".to_string(),
+                amount: Uint128::new(200),
+            },
+        ];
+        let result = validate_coins_number(&funds, 1);
+        assert!(result.is_err());
     }
 }

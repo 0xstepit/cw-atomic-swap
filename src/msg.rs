@@ -38,11 +38,20 @@ pub enum ExecuteMsg {
     AcceptSwapOrder {
         /// Identifier of the swap order the user wants to match.
         order_id: u64,
+        /// The maker associated with the order.
+        // TODO: add a way to retrieve an order from the id for a better UX.
+        maker: String,
     },
     /// This message is sent by the `x/authz` module to complete an swap order
     /// after another user tried to match it with the `AcceptSwapOrder`
     /// `ExecuteMsg`.
-    ConfirmSwapOrder {},
+    ConfirmSwapOrder {
+        /// Identifier of the swap order to confirm.
+        order_id: u64,
+        /// The maker associated with the order.
+        // TODO: add a way to retrieve an order from the id for a better UX.
+        maker: String,
+    },
 }
 
 /// This enum describes available contract's query messages.

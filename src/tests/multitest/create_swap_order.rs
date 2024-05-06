@@ -100,7 +100,7 @@ fn create_order_works() {
     assert_eq!(resp.orders.len(), 1, "expected one order from the maker");
     assert_eq!(resp_all.orders.len(), 2, "expected two orders");
 
-    // Let the deal expire (assumption 1 block == 5s)
+    // Let the order expire
     app.update_block(|block| {
         block.height += 1;
         block.time = block.time.plus_seconds(11);
@@ -123,7 +123,7 @@ fn create_order_works() {
     assert_eq!(
         resp.orders.len(),
         0,
-        "expected zero deal from first creator because expired"
+        "expected zero order from first maker because expired"
     );
     assert_eq!(resp_all.orders.len(), 1, "expected one order still active");
 }

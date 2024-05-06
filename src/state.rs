@@ -30,6 +30,7 @@ pub struct SwapOrder {
 #[cw_serde]
 pub enum OrderStatus {
     Open,
+    Matched,
     Failed,
     Cancelled,
     Executed,

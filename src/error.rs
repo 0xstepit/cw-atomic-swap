@@ -15,6 +15,12 @@ pub enum ContractError {
         second_coin: String,
     },
 
+    #[error("wrong number of coins: accepted {accepted}, received {received}")]
+    FundsError { accepted: u64, received: u64 },
+
+    #[error("this method does not accept coins")]
+    CoinNotAllowed {},
+
     #[error("swap order not available: expired or already matched")]
     SwapOrderNotAvailable {},
 
