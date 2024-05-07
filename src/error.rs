@@ -29,7 +29,10 @@ pub enum ContractError {
 
     #[error("maker cannot accept its own order")]
     SenderIsMaker {},
+}
 
+#[derive(Error, Debug)]
+pub enum EncodeError {
     #[error("unable to encode json")]
-    JsonEncodeError {},
+    JsonEncodeError(#[from] serde_json::Error),
 }

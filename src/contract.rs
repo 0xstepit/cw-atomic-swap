@@ -3,6 +3,8 @@ use cosmwasm_std::{
     StdResult,
 };
 
+use osmosis_std::types::cosmos::base::v1beta1::Coin as OsmosisCoin;
+
 use crate::{
     error::ContractError,
     msg::{ExecuteMsg, InstantiateMsg, QueryMsg},
@@ -62,8 +64,13 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
 }
 
 pub mod execute {
-    use cosmwasm_std::{Addr, Coin, StdError};
+    use cosmwasm_std::{Addr, BankMsg, Coin, CosmosMsg, StdError};
+    use osmosis_std::shim::Any;
+    use osmosis_std::types::cosmos::authz::v1beta1::MsgExec;
+    use osmosis_std::types::cosmwasm::wasm::v1::MsgExecuteContract;
+    use prost::Message;
 
+    use crate::error::EncodeError;
     use crate::state::{next_id, OrderStatus, SwapOrder, SWAP_ORDERS};
 
     use super::*;
@@ -83,8 +90,6 @@ pub mod execute {
         taker: Option<String>,
         timeout: u64,
     ) -> Result<Response, ContractError> {
-        let config = CONFIG.load(deps.storage)?;
-
         validate_different_denoms(&coin_in.denom, &coin_out.denom)?;
         validate_native_denom(&coin_in.denom)?;
         validate_native_denom(&coin_out.denom)?;
@@ -150,7 +155,7 @@ pub mod execute {
             });
         }
 
-        // Check if the deal is reserved and sender is not the lucky one.
+        // Check if the order is reserved and sender is not the lucky one.
         if let Some(taker) = order.taker {
             if taker != info.sender {
                 return Err(ContractError::Unauthorized {});
@@ -162,9 +167,113 @@ pub mod execute {
 
         SWAP_ORDERS.save(deps.storage, (&maker, order_id), &order)?;
 
+        let msg_exec = create_authz_encoded_message(
+            deps.as_ref(),
+            env.contract.address.to_string(),
+            order_id,
+            maker.to_string(),
+            order.coin_in,
+        );
+        let authz_msg: CosmosMsg = CosmosMsg::Stargate {
+            type_url: "/cosmos.authz.v1beta1.MsgExec".to_string(),
+            value: msg_exec.into(),
+        };
+
         Ok(Response::new()
             .add_attribute("action", "match_order")
-            .add_attribute("order_taker", order.taker.unwrap()))
+            .add_attribute("order_taker", order.taker.unwrap())
+            .add_message(authz_msg))
+    }
+
+    pub fn create_authz_encoded_message(
+        deps: Deps,
+        contract: String,
+        order_id: u64,
+        maker: String,
+        coin: Coin,
+    ) -> MsgExec {
+        deps.api.debug("MsgExec built");
+        let update_name_msg = ExecuteMsg::ConfirmSwapOrder {
+            order_id,
+            maker: maker.clone(),
+        };
+
+        let mut exec_contract_buf = vec![];
+        MsgExecuteContract::encode(
+            &MsgExecuteContract {
+                sender: maker.to_string(),
+                msg: serde_json::to_vec(&update_name_msg)
+                    .map_err(EncodeError::JsonEncodeError)
+                    .unwrap(),
+                funds: [OsmosisCoin {
+                    amount: coin.amount.to_string(),
+                    denom: coin.denom,
+                }]
+                .into(),
+                contract: contract.clone(),
+            },
+            &mut exec_contract_buf,
+        )
+        .unwrap();
+
+        deps.api.debug("Completed MsgExecuteContract encoding");
+
+        MsgExec {
+            grantee: contract,
+            msgs: vec![Any {
+                type_url: "/cosmwasm.wasm.v1.MsgExecuteContract".to_string(),
+                value: exec_contract_buf.clone(),
+            }],
+        }
+    }
+
+    pub fn confirm_swap_order(
+        deps: DepsMut,
+        info: MessageInfo,
+        env: Env,
+        order_id: u64,
+        maker: String,
+    ) -> Result<Response, ContractError> {
+        validate_coins_number(&info.funds, 1)?;
+
+        if maker != info.sender {
+            return Err(ContractError::Unauthorized {});
+        }
+
+        let mut order = SWAP_ORDERS.load(deps.storage, (&info.sender, order_id))?;
+
+        // Return error if the order is expired or already matched.
+        // NOTE: order should not be timeouted.
+        if order.status != OrderStatus::Matched || order.timeout < env.block.time.seconds() {
+            return Err(ContractError::SwapOrderNotAvailable {});
+        }
+
+        // Check if sent coins are the same of the selected order.
+        if order.coin_in != info.funds[0] {
+            return Err(ContractError::WrongCoin {
+                denom: order.coin_in.denom.clone(),
+                amount: order.coin_in.amount,
+            });
+        }
+
+        order.status = OrderStatus::Executed;
+        SWAP_ORDERS.save(deps.storage, (&info.sender, order_id), &order)?;
+
+        let taker = order.taker.unwrap();
+        let mut msgs = vec![
+            BankMsg::Send {
+                to_address: maker.into(),
+                amount: vec![order.coin_out],
+            },
+            BankMsg::Send {
+                to_address: taker.clone().into_string(),
+                amount: vec![order.coin_in],
+            },
+        ];
+
+        Ok(Response::new()
+            .add_attribute("action", "match_order")
+            .add_attribute("order_taker", taker.into_string()))
     }
 
     /// Check that only one coin has been sent to the contract.
