@@ -1,0 +1,515 @@
+{
+  "contract_name": "cw-atomic-swap",
+  "contract_version": "0.1.0",
+  "idl_version": "1.0.0",
+  "instantiate": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "InstantiateMsg",
+    "description": "This struct contains required variables to instantiate a new market.",
+    "type": "object",
+    "properties": {
+      "owner": {
+        "description": "Owner of the smart contract.",
+        "type": [
+          "string",
+          "null"
+        ]
+      }
+    },
+    "additionalProperties": false
+  },
+  "execute": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "ExecuteMsg",
+    "description": "This enum describes available contract's execution messages.",
+    "oneOf": [
+      {
+        "description": "Allows to update the contract's configuration. Only owner can update.",
+        "type": "object",
+        "required": [
+          "update_config"
+        ],
+        "properties": {
+          "update_config": {
+            "type": "object",
+            "required": [
+              "new_owner"
+            ],
+            "properties": {
+              "new_owner": {
+                "description": "New contract owner.",
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      {
+        "description": "Allows a user to create a swap order. The execution of the order requires the user to have grant a `ContractExecutionAuthorization` to this smart contract via the `x/authz` Cosmos SDK module.",
+        "type": "object",
+        "required": [
+          "create_swap_order"
+        ],
+        "properties": {
+          "create_swap_order": {
+            "type": "object",
+            "required": [
+              "coin_in",
+              "coin_out",
+              "timeout"
+            ],
+            "properties": {
+              "coin_in": {
+                "description": "Coin to send.",
+                "allOf": [
+                  {
+                    "$ref": "#/definitions/Coin"
+                  }
+                ]
+              },
+              "coin_out": {
+                "description": "Coin to received.",
+                "allOf": [
+                  {
+                    "$ref": "#/definitions/Coin"
+                  }
+                ]
+              },
+              "taker": {
+                "description": "If specified, is the only counterparty accepted in the swap.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "timeout": {
+                "description": "Timestamp after which the deal expires in seconds.",
+                "type": "integer",
+                "format": "uint64",
+                "minimum": 0.0
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      {
+        "description": "Allows a user to match an existing swap order. The function requries to sent along with the transaction required funds.",
+        "type": "object",
+        "required": [
+          "accept_swap_order"
+        ],
+        "properties": {
+          "accept_swap_order": {
+            "type": "object",
+            "required": [
+              "maker",
+              "order_id"
+            ],
+            "properties": {
+              "maker": {
+                "description": "The maker associated with the order.",
+                "type": "string"
+              },
+              "order_id": {
+                "description": "Identifier of the swap order the user wants to match.",
+                "type": "integer",
+                "format": "uint64",
+                "minimum": 0.0
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      {
+        "description": "This message is sent by the `x/authz` module to complete an swap order after another user tried to match it with the `AcceptSwapOrder` `ExecuteMsg`.",
+        "type": "object",
+        "required": [
+          "confirm_swap_order"
+        ],
+        "properties": {
+          "confirm_swap_order": {
+            "type": "object",
+            "required": [
+              "maker",
+              "order_id"
+            ],
+            "properties": {
+              "maker": {
+                "description": "The maker associated with the order.",
+                "type": "string"
+              },
+              "order_id": {
+                "description": "Identifier of the swap order to confirm.",
+                "type": "integer",
+                "format": "uint64",
+                "minimum": 0.0
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      }
+    ],
+    "definitions": {
+      "Coin": {
+        "type": "object",
+        "required": [
+          "amount",
+          "denom"
+        ],
+        "properties": {
+          "amount": {
+            "$ref": "#/definitions/Uint128"
+          },
+          "denom": {
+            "type": "string"
+          }
+        }
+      },
+      "Uint128": {
+        "description": "A thin wrapper around u128 that is using strings for JSON encoding/decoding, such that the full u128 range can be used for clients that convert JSON numbers to floats, like JavaScript and jq.\n\n# Examples\n\nUse `from` to create instances of this and `u128` to get the value out:\n\n``` # use cosmwasm_std::Uint128; let a = Uint128::from(123u128); assert_eq!(a.u128(), 123);\n\nlet b = Uint128::from(42u64); assert_eq!(b.u128(), 42);\n\nlet c = Uint128::from(70u32); assert_eq!(c.u128(), 70); ```",
+        "type": "string"
+      }
+    }
+  },
+  "query": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "QueryMsg",
+    "description": "This enum describes available contract's query messages.",
+    "oneOf": [
+      {
+        "description": "Retrieve the market configuration.",
+        "type": "object",
+        "required": [
+          "config"
+        ],
+        "properties": {
+          "config": {
+            "type": "object",
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      {
+        "description": "Retrieve all active swap orders.",
+        "type": "object",
+        "required": [
+          "all_swap_orders"
+        ],
+        "properties": {
+          "all_swap_orders": {
+            "type": "object",
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      {
+        "description": "Retrieve all active swap orders by maker.",
+        "type": "object",
+        "required": [
+          "swap_orders_by_maker"
+        ],
+        "properties": {
+          "swap_orders_by_maker": {
+            "type": "object",
+            "required": [
+              "maker"
+            ],
+            "properties": {
+              "maker": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      }
+    ]
+  },
+  "migrate": null,
+  "sudo": null,
+  "responses": {
+    "all_swap_orders": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "AllSwapOrdersResponse",
+      "type": "object",
+      "required": [
+        "orders"
+      ],
+      "properties": {
+        "orders": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": [
+              {
+                "type": "array",
+                "items": [
+                  {
+                    "$ref": "#/definitions/Addr"
+                  },
+                  {
+                    "type": "integer",
+                    "format": "uint64",
+                    "minimum": 0.0
+                  }
+                ],
+                "maxItems": 2,
+                "minItems": 2
+              },
+              {
+                "$ref": "#/definitions/SwapOrder"
+              }
+            ],
+            "maxItems": 2,
+            "minItems": 2
+          }
+        }
+      },
+      "additionalProperties": false,
+      "definitions": {
+        "Addr": {
+          "description": "A human readable address.\n\nIn Cosmos, this is typically bech32 encoded. But for multi-chain smart contracts no assumptions should be made other than being UTF-8 encoded and of reasonable length.\n\nThis type represents a validated address. It can be created in the following ways 1. Use `Addr::unchecked(input)` 2. Use `let checked: Addr = deps.api.addr_validate(input)?` 3. Use `let checked: Addr = deps.api.addr_humanize(canonical_addr)?` 4. Deserialize from JSON. This must only be done from JSON that was validated before such as a contract's state. `Addr` must not be used in messages sent by the user because this would result in unvalidated instances.\n\nThis type is immutable. If you really need to mutate it (Really? Are you sure?), create a mutable copy using `let mut mutable = Addr::to_string()` and operate on that `String` instance.",
+          "type": "string"
+        },
+        "Coin": {
+          "type": "object",
+          "required": [
+            "amount",
+            "denom"
+          ],
+          "properties": {
+            "amount": {
+              "$ref": "#/definitions/Uint128"
+            },
+            "denom": {
+              "type": "string"
+            }
+          }
+        },
+        "OrderStatus": {
+          "type": "string",
+          "enum": [
+            "open",
+            "matched",
+            "failed",
+            "cancelled",
+            "executed"
+          ]
+        },
+        "SwapOrder": {
+          "description": "Contains all information of an order.",
+          "type": "object",
+          "required": [
+            "coin_in",
+            "coin_out",
+            "status",
+            "timeout"
+          ],
+          "properties": {
+            "coin_in": {
+              "description": "Coin that the user wants to swap.",
+              "allOf": [
+                {
+                  "$ref": "#/definitions/Coin"
+                }
+              ]
+            },
+            "coin_out": {
+              "description": "Coin that the user wants to receive.",
+              "allOf": [
+                {
+                  "$ref": "#/definitions/Coin"
+                }
+              ]
+            },
+            "status": {
+              "description": "Status of the swap order.",
+              "allOf": [
+                {
+                  "$ref": "#/definitions/OrderStatus"
+                }
+              ]
+            },
+            "taker": {
+              "description": "Only address that can accept the deal. If None, it is an open order. When matched, it is equal to the taker address.",
+              "anyOf": [
+                {
+                  "$ref": "#/definitions/Addr"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "timeout": {
+              "description": "Timestamp after which the deal expires in seconds.",
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0.0
+            }
+          },
+          "additionalProperties": false
+        },
+        "Uint128": {
+          "description": "A thin wrapper around u128 that is using strings for JSON encoding/decoding, such that the full u128 range can be used for clients that convert JSON numbers to floats, like JavaScript and jq.\n\n# Examples\n\nUse `from` to create instances of this and `u128` to get the value out:\n\n``` # use cosmwasm_std::Uint128; let a = Uint128::from(123u128); assert_eq!(a.u128(), 123);\n\nlet b = Uint128::from(42u64); assert_eq!(b.u128(), 42);\n\nlet c = Uint128::from(70u32); assert_eq!(c.u128(), 70); ```",
+          "type": "string"
+        }
+      }
+    },
+    "config": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Config",
+      "description": "This struct contains configuration parameters for the atomic swap market.",
+      "type": "object",
+      "required": [
+        "owner"
+      ],
+      "properties": {
+        "owner": {
+          "description": "Address of the contract owner. This is the only address that can modify the `Config`.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Addr"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "definitions": {
+        "Addr": {
+          "description": "A human readable address.\n\nIn Cosmos, this is typically bech32 encoded. But for multi-chain smart contracts no assumptions should be made other than being UTF-8 encoded and of reasonable length.\n\nThis type represents a validated address. It can be created in the following ways 1. Use `Addr::unchecked(input)` 2. Use `let checked: Addr = deps.api.addr_validate(input)?` 3. Use `let checked: Addr = deps.api.addr_humanize(canonical_addr)?` 4. Deserialize from JSON. This must only be done from JSON that was validated before such as a contract's state. `Addr` must not be used in messages sent by the user because this would result in unvalidated instances.\n\nThis type is immutable. If you really need to mutate it (Really? Are you sure?), create a mutable copy using `let mut mutable = Addr::to_string()` and operate on that `String` instance.",
+          "type": "string"
+        }
+      }
+    },
+    "swap_orders_by_maker": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "SwapOrdersByMakerResponse",
+      "type": "object",
+      "required": [
+        "orders"
+      ],
+      "properties": {
+        "orders": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": [
+              {
+                "type": "integer",
+                "format": "uint64",
+                "minimum": 0.0
+              },
+              {
+                "$ref": "#/definitions/SwapOrder"
+              }
+            ],
+            "maxItems": 2,
+            "minItems": 2
+          }
+        }
+      },
+      "additionalProperties": false,
+      "definitions": {
+        "Addr": {
+          "description": "A human readable address.\n\nIn Cosmos, this is typically bech32 encoded. But for multi-chain smart contracts no assumptions should be made other than being UTF-8 encoded and of reasonable length.\n\nThis type represents a validated address. It can be created in the following ways 1. Use `Addr::unchecked(input)` 2. Use `let checked: Addr = deps.api.addr_validate(input)?` 3. Use `let checked: Addr = deps.api.addr_humanize(canonical_addr)?` 4. Deserialize from JSON. This must only be done from JSON that was validated before such as a contract's state. `Addr` must not be used in messages sent by the user because this would result in unvalidated instances.\n\nThis type is immutable. If you really need to mutate it (Really? Are you sure?), create a mutable copy using `let mut mutable = Addr::to_string()` and operate on that `String` instance.",
+          "type": "string"
+        },
+        "Coin": {
+          "type": "object",
+          "required": [
+            "amount",
+            "denom"
+          ],
+          "properties": {
+            "amount": {
+              "$ref": "#/definitions/Uint128"
+            },
+            "denom": {
+              "type": "string"
+            }
+          }
+        },
+        "OrderStatus": {
+          "type": "string",
+          "enum": [
+            "open",
+            "matched",
+            "failed",
+            "cancelled",
+            "executed"
+          ]
+        },
+        "SwapOrder": {
+          "description": "Contains all information of an order.",
+          "type": "object",
+          "required": [
+            "coin_in",
+            "coin_out",
+            "status",
+            "timeout"
+          ],
+          "properties": {
+            "coin_in": {
+              "description": "Coin that the user wants to swap.",
+              "allOf": [
+                {
+                  "$ref": "#/definitions/Coin"
+                }
+              ]
+            },
+            "coin_out": {
+              "description": "Coin that the user wants to receive.",
+              "allOf": [
+                {
+                  "$ref": "#/definitions/Coin"
+                }
+              ]
+            },
+            "status": {
+              "description": "Status of the swap order.",
+              "allOf": [
+                {
+                  "$ref": "#/definitions/OrderStatus"
+                }
+              ]
+            },
+            "taker": {
+              "description": "Only address that can accept the deal. If None, it is an open order. When matched, it is equal to the taker address.",
+              "anyOf": [
+                {
+                  "$ref": "#/definitions/Addr"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "timeout": {
+              "description": "Timestamp after which the deal expires in seconds.",
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0.0
+            }
+          },
+          "additionalProperties": false
+        },
+        "Uint128": {
+          "description": "A thin wrapper around u128 that is using strings for JSON encoding/decoding, such that the full u128 range can be used for clients that convert JSON numbers to floats, like JavaScript and jq.\n\n# Examples\n\nUse `from` to create instances of this and `u128` to get the value out:\n\n``` # use cosmwasm_std::Uint128; let a = Uint128::from(123u128); assert_eq!(a.u128(), 123);\n\nlet b = Uint128::from(42u64); assert_eq!(b.u128(), 42);\n\nlet c = Uint128::from(70u32); assert_eq!(c.u128(), 70); ```",
+          "type": "string"
+        }
+      }
+    }
+  }
+}
