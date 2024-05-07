@@ -72,6 +72,8 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
 
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn reply(deps: DepsMut, _env: Env, msg: Reply) -> Result<Response, ContractError> {
+    deps.api
+        .debug("Failed execution, entered in reply entry point");
     match msg.id {
         // CONFIRM_ORDER_REPLY_ID => Ok(Response::new()),
         CONFIRM_ORDER_REPLY_ID => {
@@ -180,6 +182,13 @@ pub mod execute {
         order_id: u64,
         maker: String,
     ) -> Result<Response, ContractError> {
+        deps.api.debug("Initiate acceptance of swap order");
+
+        deps.api.debug(&format!(
+            "Accept swap block time is: {}",
+            env.block.time.seconds(),
+        ));
+
         validate_coins_number(&info.funds, 1)?;
 
         // We don't care about validation because the address is not stored.
@@ -197,11 +206,12 @@ pub mod execute {
         // Check if sent coins are the same of the selected order.
         if order.coin_out != info.funds[0] {
             return Err(ContractError::WrongCoin {
-                denom: order.coin_out.denom.clone(),
-                amount: order.coin_out.amount,
+                sent_denom: info.funds[0].denom.clone(),
+                sent_amount: info.funds[0].amount.into(),
+                expected_denom: order.coin_out.denom,
+                expected_amount: order.coin_out.amount.into(),
             });
         }
-
         // Check if the order is reserved and sender is not the lucky one.
         if let Some(taker) = order.taker {
             if taker != info.sender {
@@ -238,6 +248,73 @@ pub mod execute {
             .add_attribute("action", "match_order")
             .add_attribute("order_taker", order.taker.unwrap())
             .add_submessage(msg))
+    }
+
+    pub fn confirm_swap_order(
+        deps: DepsMut,
+        info: MessageInfo,
+        env: Env,
+        order_id: u64,
+        maker: String,
+    ) -> Result<Response, ContractError> {
+        validate_coins_number(&info.funds, 1)?;
+
+        deps.api.debug("Initiate confirm of swap order");
+
+        deps.api.debug(&format!(
+            "Sender is: {}, maker is: {}",
+            info.sender.to_string(),
+            maker.to_string(),
+        ));
+
+        if maker != info.sender {
+            return Err(ContractError::Fuck {});
+        }
+
+        let maker_addr = Addr::unchecked(maker.clone());
+        let mut order = SWAP_ORDERS.load(deps.storage, (&maker_addr, order_id))?;
+
+        deps.api.debug(&format!(
+            "block time is: {}, timeout: {}",
+            env.block.time.seconds(),
+            order.timeout,
+        ));
+        // deps.api.debug(&format!("Order status: {}", order.status,));
+        // Return error if the order is expired or already matched.
+        // NOTE: order should not be timeouted.
+        if order.status != OrderStatus::Matched || order.timeout < env.block.time.seconds() {
+            return Err(ContractError::SwapOrderNotAvailable {});
+        }
+
+        // Check if sent coins are the same of the selected order.
+        if order.coin_in != info.funds[0] {
+            return Err(ContractError::WrongCoin {
+                sent_denom: info.funds[0].denom.clone(),
+                sent_amount: info.funds[0].amount.into(),
+                expected_denom: order.coin_in.denom,
+                expected_amount: order.coin_in.amount.into(),
+            });
+        }
+
+        order.status = OrderStatus::Executed;
+        SWAP_ORDERS.save(deps.storage, (&maker_addr, order_id), &order)?;
+
+        let taker = order.taker.unwrap();
+        let msgs = vec![
+            BankMsg::Send {
+                to_address: maker,
+                amount: vec![order.coin_out],
+            },
+            BankMsg::Send {
+                to_address: taker.clone().into_string(),
+                amount: vec![order.coin_in],
+            },
+        ];
+
+        Ok(Response::new()
+            .add_messages(msgs)
+            .add_attribute("action", "match_order")
+            .add_attribute("order_taker", taker.into_string()))
     }
 
     pub fn create_authz_encoded_message(
@@ -280,56 +357,6 @@ pub mod execute {
                 value: exec_contract_buf.clone(),
             }],
         }
-    }
-
-    pub fn confirm_swap_order(
-        deps: DepsMut,
-        info: MessageInfo,
-        env: Env,
-        order_id: u64,
-        maker: String,
-    ) -> Result<Response, ContractError> {
-        validate_coins_number(&info.funds, 1)?;
-
-        if maker != info.sender {
-            return Err(ContractError::Unauthorized {});
-        }
-
-        let mut order = SWAP_ORDERS.load(deps.storage, (&info.sender, order_id))?;
-
-        // Return error if the order is expired or already matched.
-        // NOTE: order should not be timeouted.
-        if order.status != OrderStatus::Matched || order.timeout < env.block.time.seconds() {
-            return Err(ContractError::SwapOrderNotAvailable {});
-        }
-
-        // Check if sent coins are the same of the selected order.
-        if order.coin_in != info.funds[0] {
-            return Err(ContractError::WrongCoin {
-                denom: order.coin_in.denom.clone(),
-                amount: order.coin_in.amount,
-            });
-        }
-
-        order.status = OrderStatus::Executed;
-        SWAP_ORDERS.save(deps.storage, (&info.sender, order_id), &order)?;
-
-        let taker = order.taker.unwrap();
-        let msgs = vec![
-            BankMsg::Send {
-                to_address: maker,
-                amount: vec![order.coin_out],
-            },
-            BankMsg::Send {
-                to_address: taker.clone().into_string(),
-                amount: vec![order.coin_in],
-            },
-        ];
-
-        Ok(Response::new()
-            .add_messages(msgs)
-            .add_attribute("action", "match_order")
-            .add_attribute("order_taker", taker.into_string()))
     }
 
     /// Check that only one coin has been sent to the contract.
@@ -456,8 +483,11 @@ mod tests {
 
     use cosmwasm_std::{
         testing::{mock_dependencies, mock_env, mock_info},
-        Addr, Coin, Uint128,
+        Addr, Coin, SubMsgResponse, SubMsgResult, Uint128,
     };
+    use osmosis_std::types::cosmos::authz::v1beta1::MsgExecResponse;
+
+    use crate::state::SwapOrder;
 
     use self::tests::execute::validate_coins_number;
 
@@ -507,5 +537,50 @@ mod tests {
         ];
         let result = validate_coins_number(&funds, 1);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_replies() {
+        let mut deps = mock_dependencies();
+
+        let owner_addr = Addr::unchecked("0xowner".to_string());
+        let maker_addr = Addr::unchecked("0xmaker".to_string());
+        let taker_addr = Addr::unchecked("0xtaker".to_string());
+
+        let config = Config { owner: owner_addr };
+        CONFIG.save(deps.as_mut().storage, &config).unwrap();
+
+        ORDER_POINTER
+            .save(
+                deps.as_mut().storage,
+                &OrderPointer {
+                    order_id: 0,
+                    maker: maker_addr.clone(),
+                },
+            )
+            .unwrap();
+        let swap_order = SwapOrder {
+            coin_in: Coin::new(1_000, "uosmo"),
+            coin_out: Coin::new(1_000, "usdc"),
+            taker: Some(taker_addr),
+            timeout: 10,
+            status: OrderStatus::Matched,
+        };
+        SWAP_ORDERS
+            .save(deps.as_mut().storage, (&maker_addr, 0), &swap_order)
+            .unwrap();
+
+        let reply_msg = Reply {
+            id: CONFIRM_ORDER_REPLY_ID,
+            result: SubMsgResult::Ok(SubMsgResponse {
+                events: vec![],
+                data: Some(MsgExecResponse { results: vec![] }.into()),
+            }),
+        };
+        reply(deps.as_mut(), mock_env(), reply_msg).unwrap();
+        let swap_order = SWAP_ORDERS
+            .load(deps.as_mut().storage, (&maker_addr, 0))
+            .unwrap();
+        assert_eq!(swap_order.status, OrderStatus::Failed);
     }
 }

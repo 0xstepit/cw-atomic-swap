@@ -1,4 +1,4 @@
-use cosmwasm_std::{StdError, Uint128};
+use cosmwasm_std::{Coin, StdError, Uint128};
 use thiserror::Error;
 
 #[derive(Error, Debug, PartialEq)]
@@ -8,6 +8,9 @@ pub enum ContractError {
 
     #[error("unauthorized")]
     Unauthorized,
+
+    #[error("fuck you")]
+    Fuck,
 
     #[error("first coin {first_coin} is equal to second coin {second_coin}")]
     CoinError {
@@ -24,8 +27,15 @@ pub enum ContractError {
     #[error("swap order not available: expired or already matched")]
     SwapOrderNotAvailable {},
 
-    #[error("sent wrong coins, expected {amount}{denom}")]
-    WrongCoin { denom: String, amount: Uint128 },
+    #[error(
+        "sent wrong coins {sent_denom}{sent_amount}, expected {expected_amount}{expected_denom}"
+    )]
+    WrongCoin {
+        sent_denom: String,
+        sent_amount: u128,
+        expected_denom: String,
+        expected_amount: u128,
+    },
 
     #[error("maker cannot accept its own order")]
     SenderIsMaker {},
