@@ -26,7 +26,7 @@ impl Stargate for CustomStargate {
         ExecC: Debug + Clone + PartialEq + JsonSchema + DeserializeOwned + 'static,
         QueryC: CustomQuery + DeserializeOwned + 'static,
     {
-        Err(anyhow::anyhow!("Error"))
-        // Ok(AppResponse::default())
+        // Err(anyhow::anyhow!("Error"))
+        Ok(AppResponse::default())
     }
 }

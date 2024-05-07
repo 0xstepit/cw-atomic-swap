@@ -43,7 +43,14 @@ pub fn next_id(store: &mut dyn Storage) -> StdResult<u64> {
     Ok(id)
 }
 
+#[cw_serde]
+pub struct OrderPointer {
+    pub order_id: u64,
+    pub maker: Addr,
+}
+
 /// Data structure used to store the number of created deals.
 pub const COUNTER: Item<u64> = Item::new("counter");
+pub const ORDER_POINTER: Item<OrderPointer> = Item::new("order_pointer");
 pub const CONFIG: Item<Config> = Item::new("config");
 pub const SWAP_ORDERS: Map<(&Addr, u64), SwapOrder> = Map::new("swap_orders");

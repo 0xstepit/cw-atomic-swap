@@ -16,9 +16,7 @@ pub enum ExecuteMsg {
     /// Allows to update the contract's configuration. Only owner can update.
     UpdateConfig {
         /// New contract owner.
-        new_owner: Option<String>,
-        /// New swap fee.
-        new_fee: Option<Decimal>,
+        new_owner: String,
     },
     /// Allows a user to create a swap order. The execution of the order
     /// requires the user to have grant a `ContractExecutionAuthorization`

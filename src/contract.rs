@@ -1,6 +1,6 @@
 use cosmwasm_std::{
-    coin, entry_point, to_json_binary, Binary, Decimal, Deps, DepsMut, Env, MessageInfo, Response,
-    StdResult,
+    coin, entry_point, to_json_binary, Binary, Decimal, Deps, DepsMut, Env, MessageInfo, Reply,
+    Response, StdError, StdResult,
 };
 
 use osmosis_std::types::cosmos::base::v1beta1::Coin as OsmosisCoin;
@@ -8,9 +8,9 @@ use osmosis_std::types::cosmos::base::v1beta1::Coin as OsmosisCoin;
 use crate::{
     error::ContractError,
     msg::{ExecuteMsg, InstantiateMsg, QueryMsg},
-    state::{Config, CONFIG},
+    state::{Config, OrderPointer, OrderStatus, CONFIG, ORDER_POINTER, SWAP_ORDERS},
 };
-
+const CONFIRM_ORDER_REPLY_ID: u64 = 1;
 const CONTRACT_NAME: &str = "crates.io/cw-atomic-swap";
 const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -23,7 +23,12 @@ pub fn instantiate(
 ) -> Result<Response, ContractError> {
     cw2::set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
 
-    CONFIG.save(deps.storage, &Config { owner: info.sender })?;
+    let mut owner = info.sender;
+    if let Some(msg_owner) = msg.owner {
+        owner = deps.api.addr_validate(&msg_owner)?;
+    }
+
+    CONFIG.save(deps.storage, &Config { owner })?;
 
     Ok(Response::new())
 }
@@ -37,7 +42,7 @@ pub fn execute(
 ) -> Result<Response, ContractError> {
     use ExecuteMsg::*;
     match msg {
-        UpdateConfig { new_owner, new_fee } => unimplemented!(),
+        UpdateConfig { new_owner } => execute::update_config(deps, env, &info.sender, new_owner),
         CreateSwapOrder {
             coin_in,
             coin_out,
@@ -47,7 +52,9 @@ pub fn execute(
         AcceptSwapOrder { order_id, maker } => {
             execute::accept_swap_order(deps, info, env, order_id, maker)
         }
-        ConfirmSwapOrder { order_id, maker } => unimplemented!(),
+        ConfirmSwapOrder { order_id, maker } => {
+            execute::confirm_swap_order(deps, info, env, order_id, maker)
+        }
     }
 }
 
@@ -63,17 +70,57 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
     }
 }
 
+#[cfg_attr(not(feature = "library"), entry_point)]
+pub fn reply(deps: DepsMut, _env: Env, msg: Reply) -> Result<Response, ContractError> {
+    match msg.id {
+        // CONFIRM_ORDER_REPLY_ID => Ok(Response::new()),
+        CONFIRM_ORDER_REPLY_ID => {
+            let OrderPointer { order_id, maker } = ORDER_POINTER.load(deps.storage)?;
+            SWAP_ORDERS.update(
+                deps.storage,
+                (&maker, order_id),
+                |swap_order| match swap_order {
+                    Some(mut order) => {
+                        order.status = OrderStatus::Failed;
+                        Ok(order)
+                    }
+                    None => Err(ContractError::Unauthorized),
+                },
+            )?;
+            Ok(Response::new())
+        }
+        _ => Err(StdError::generic_err(format!("received unkown reply id: {}", msg.id)).into()),
+    }
+}
+
 pub mod execute {
-    use cosmwasm_std::{Addr, BankMsg, Coin, CosmosMsg, StdError};
+    use cosmwasm_std::{ensure, Addr, BankMsg, Coin, CosmosMsg, StdError, SubMsg};
     use osmosis_std::shim::Any;
     use osmosis_std::types::cosmos::authz::v1beta1::MsgExec;
     use osmosis_std::types::cosmwasm::wasm::v1::MsgExecuteContract;
     use prost::Message;
 
     use crate::error::EncodeError;
-    use crate::state::{next_id, OrderStatus, SwapOrder, SWAP_ORDERS};
+    use crate::state::{next_id, OrderPointer, OrderStatus, SwapOrder, ORDER_POINTER, SWAP_ORDERS};
 
     use super::*;
+
+    /// Allows to update the atomic swap market configuration.
+    pub fn update_config(
+        deps: DepsMut,
+        _env: Env,
+        sender: &Addr,
+        new_owner: String,
+    ) -> Result<Response, ContractError> {
+        let mut config = CONFIG.load(deps.storage)?;
+        ensure!(config.owner == sender, ContractError::Unauthorized);
+        config.owner = deps.api.addr_validate(&new_owner)?;
+
+        CONFIG.save(deps.storage, &config)?;
+        Ok(Response::new()
+            .add_attribute("action", "update_config")
+            .add_attribute("new_owner", new_owner))
+    }
 
     /// Create a new atomic swap order.
     ///
@@ -166,6 +213,13 @@ pub mod execute {
         order.status = OrderStatus::Matched;
 
         SWAP_ORDERS.save(deps.storage, (&maker, order_id), &order)?;
+        ORDER_POINTER.save(
+            deps.storage,
+            &OrderPointer {
+                maker: maker.clone(),
+                order_id,
+            },
+        )?;
 
         let msg_exec = create_authz_encoded_message(
             deps.as_ref(),
@@ -178,11 +232,12 @@ pub mod execute {
             type_url: "/cosmos.authz.v1beta1.MsgExec".to_string(),
             value: msg_exec.into(),
         };
+        let msg = SubMsg::reply_on_error(authz_msg, CONFIRM_ORDER_REPLY_ID);
 
         Ok(Response::new()
             .add_attribute("action", "match_order")
             .add_attribute("order_taker", order.taker.unwrap())
-            .add_message(authz_msg))
+            .add_submessage(msg))
     }
 
     pub fn create_authz_encoded_message(
@@ -260,9 +315,9 @@ pub mod execute {
         SWAP_ORDERS.save(deps.storage, (&info.sender, order_id), &order)?;
 
         let taker = order.taker.unwrap();
-        let mut msgs = vec![
+        let msgs = vec![
             BankMsg::Send {
-                to_address: maker.into(),
+                to_address: maker,
                 amount: vec![order.coin_out],
             },
             BankMsg::Send {
@@ -272,6 +327,7 @@ pub mod execute {
         ];
 
         Ok(Response::new()
+            .add_messages(msgs)
             .add_attribute("action", "match_order")
             .add_attribute("order_taker", taker.into_string()))
     }

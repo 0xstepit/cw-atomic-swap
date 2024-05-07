@@ -17,7 +17,9 @@ pub fn atomic_swap_market_contract() -> Box<dyn Contract<Empty>> {
         crate::contract::execute,
         crate::contract::instantiate,
         crate::contract::query,
-    );
+    )
+    .with_reply_empty(crate::contract::reply);
+
     Box::new(contract)
 }
 
