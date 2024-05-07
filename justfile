@@ -18,7 +18,7 @@ fmt:
 
 # Run codecoverage
 tarpaulin:
-  @echo 'z Running tarpaulin...'
+  @echo '👀 Running tarpaulin...'
   cargo tarpaulin
   @echo '✅ Tarpaulin completed.'
 
