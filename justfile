@@ -16,6 +16,12 @@ fmt:
   cargo fmt --all -- --check
   @echo '✅ Fmt completed.'
 
+# Run codecoverage
+tarpaulin:
+  @echo 'z Running tarpaulin...'
+  cargo tarpaulin
+  @echo '✅ Tarpaulin completed.'
+
 # Run checks required by github repo.
 default-flow: fmt clippy test
 
