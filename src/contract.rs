@@ -300,20 +300,6 @@ pub mod execute {
     }
 
     /// Check if `sent_coin` is equal to `expected_coin`.
-    pub fn check_correct_coins(
-        sent_coin: &Coin,
-        expected_coin: &Coin,
-    ) -> Result<(), ContractError> {
-        if sent_coin != expected_coin {
-            return Err(ContractError::WrongCoin {
-                sent_denom: sent_coin.denom.clone(),
-                sent_amount: sent_coin.amount.into(),
-                expected_denom: expected_coin.denom.clone(),
-                expected_amount: expected_coin.amount.into(),
-            });
-        }
-        Ok(())
-    }
 
     /// Creates an `x/authz` `MsgExec` encoded message to trigger
     /// the confirmation of an order.
@@ -353,6 +339,21 @@ pub mod execute {
                 value: exec_contract_buf.clone(),
             }],
         }
+    }
+
+    pub fn check_correct_coins(
+        sent_coin: &Coin,
+        expected_coin: &Coin,
+    ) -> Result<(), ContractError> {
+        if sent_coin != expected_coin {
+            return Err(ContractError::WrongCoin {
+                sent_denom: sent_coin.denom.clone(),
+                sent_amount: sent_coin.amount.into(),
+                expected_denom: expected_coin.denom.clone(),
+                expected_amount: expected_coin.amount.into(),
+            });
+        }
+        Ok(())
     }
 
     /// Check that the two coins are different or raise an error.
@@ -515,7 +516,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn instatiate_works() {
+    fn test_instatiate_works() {
         let mut deps = mock_dependencies();
         let env = mock_env();
         let info = mock_info("stepit", &[]);
@@ -537,6 +538,93 @@ mod tests {
         assert_eq!(expected_config, config, "expected different config")
     }
 
+    #[test]
+    fn test_creare_swap_order() {
+        let mut deps = mock_dependencies();
+        let env = mock_env();
+        let info = mock_info("maker", &[]);
+
+        deps.querier.update_balance(
+            "someone",
+            vec![
+                Coin::new(1_000, "uosmo"),
+                Coin::new(1, "uion"),
+                Coin::new(1, "new_asset1"),
+                Coin::new(1, "new_asset2"),
+            ],
+        );
+
+        instantiate(
+            deps.as_mut(),
+            env.clone(),
+            info.clone(),
+            InstantiateMsg {
+                owner: Some("stepit".to_string()),
+            },
+        )
+        .unwrap();
+
+        let create_order_msg = ExecuteMsg::CreateSwapOrder {
+            coin_in: Coin::new(1_000, "uatom"),
+            coin_out: Coin::new(1_000, "usdc"),
+            taker: None,
+            timeout: 10,
+        };
+        let resp = execute(deps.as_mut(), env.clone(), info.clone(), create_order_msg);
+        assert!(resp.is_ok(), "expected correct creation of the order");
+    }
+
+    #[test]
+    fn test_replies() {
+        let mut deps = mock_dependencies();
+
+        let owner_addr = Addr::unchecked("0xowner".to_string());
+        let maker_addr = Addr::unchecked("0xmaker".to_string());
+        let taker_addr = Addr::unchecked("0xtaker".to_string());
+
+        let config = Config { owner: owner_addr };
+        CONFIG.save(deps.as_mut().storage, &config).unwrap();
+
+        ORDER_POINTER
+            .save(
+                deps.as_mut().storage,
+                &OrderPointer {
+                    order_id: 0,
+                    maker: maker_addr.clone(),
+                },
+            )
+            .unwrap();
+
+        let swap_order = SwapOrder {
+            coin_in: Coin::new(1_000, "uosmo"),
+            coin_out: Coin::new(1_000, "usdc"),
+            taker: Some(taker_addr),
+            timeout: 10,
+            status: OrderStatus::Accepted,
+        };
+        SWAP_ORDERS
+            .save(deps.as_mut().storage, (&maker_addr, 0), &swap_order)
+            .unwrap();
+
+        let reply_msg = Reply {
+            id: CONFIRM_ORDER_REPLY_ID,
+            result: SubMsgResult::Ok(SubMsgResponse {
+                events: vec![],
+                data: Some(MsgExecResponse { results: vec![] }.into()),
+            }),
+        };
+        reply(deps.as_mut(), mock_env(), reply_msg).unwrap();
+        let swap_order = SWAP_ORDERS
+            .load(deps.as_mut().storage, (&maker_addr, 0))
+            .unwrap();
+        assert_eq!(
+            swap_order.status,
+            OrderStatus::Failed,
+            "expected a different order status"
+        );
+    }
+
+    // Trivial tests, added for completeness.
     #[test]
     fn test_validate_coins_number() {
         let funds = vec![Coin {
@@ -561,47 +649,74 @@ mod tests {
     }
 
     #[test]
-    fn test_replies() {
-        let mut deps = mock_dependencies();
+    fn test_validate_different_denoms() {
+        let result = execute::validate_different_denoms(&"uosmo".to_string(), &"uosmo".to_string());
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err(),
+            ContractError::SameCoinError {
+                first_coin: "uosmo".to_string(),
+                second_coin: "uosmo".to_string()
+            }
+        );
+        let result = execute::validate_different_denoms(&"uosmo".to_string(), &"uatom".to_string());
+        assert!(result.is_ok());
+    }
 
-        let owner_addr = Addr::unchecked("0xowner".to_string());
-        let maker_addr = Addr::unchecked("0xmaker".to_string());
-        let taker_addr = Addr::unchecked("0xtaker".to_string());
-
-        let config = Config { owner: owner_addr };
-        CONFIG.save(deps.as_mut().storage, &config).unwrap();
-
-        ORDER_POINTER
-            .save(
-                deps.as_mut().storage,
-                &OrderPointer {
-                    order_id: 0,
-                    maker: maker_addr.clone(),
-                },
-            )
-            .unwrap();
-        let swap_order = SwapOrder {
-            coin_in: Coin::new(1_000, "uosmo"),
-            coin_out: Coin::new(1_000, "usdc"),
-            taker: Some(taker_addr),
-            timeout: 10,
-            status: OrderStatus::Accepted,
+    #[test]
+    fn test_check_correct_coins() {
+        let sent_coin = Coin {
+            denom: "uosmo".to_string(),
+            amount: Uint128::new(1_000),
         };
-        SWAP_ORDERS
-            .save(deps.as_mut().storage, (&maker_addr, 0), &swap_order)
-            .unwrap();
-
-        let reply_msg = Reply {
-            id: CONFIRM_ORDER_REPLY_ID,
-            result: SubMsgResult::Ok(SubMsgResponse {
-                events: vec![],
-                data: Some(MsgExecResponse { results: vec![] }.into()),
-            }),
+        let expected_coin = Coin {
+            denom: "uosmo".to_string(),
+            amount: Uint128::new(1_000),
         };
-        reply(deps.as_mut(), mock_env(), reply_msg).unwrap();
-        let swap_order = SWAP_ORDERS
-            .load(deps.as_mut().storage, (&maker_addr, 0))
-            .unwrap();
-        assert_eq!(swap_order.status, OrderStatus::Failed);
+
+        let result = execute::check_correct_coins(&sent_coin, &expected_coin);
+        assert!(result.is_ok());
+
+        let sent_coin = Coin {
+            denom: "uosmo".to_string(),
+            amount: Uint128::new(1_000),
+        };
+        let expected_coin = Coin {
+            denom: "uatom".to_string(),
+            amount: Uint128::new(1_000),
+        };
+
+        let result = execute::check_correct_coins(&sent_coin, &expected_coin);
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err(),
+            ContractError::WrongCoin {
+                sent_denom: "uosmo".to_string(),
+                sent_amount: 1_000_u128,
+                expected_denom: "uatom".to_string(),
+                expected_amount: 1_000_u128,
+            }
+        );
+
+        let sent_coin = Coin {
+            denom: "uosmo".to_string(),
+            amount: Uint128::new(1_000),
+        };
+        let expected_coin = Coin {
+            denom: "uosmo".to_string(),
+            amount: Uint128::new(2_000),
+        };
+
+        let result = execute::check_correct_coins(&sent_coin, &expected_coin);
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err(),
+            ContractError::WrongCoin {
+                sent_denom: "uosmo".to_string(),
+                sent_amount: 1_000_u128,
+                expected_denom: "uosmo".to_string(),
+                expected_amount: 2_000_u128,
+            }
+        );
     }
 }
