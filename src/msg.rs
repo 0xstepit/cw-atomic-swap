@@ -1,9 +1,9 @@
 use cosmwasm_schema::{cw_serde, QueryResponses};
-use cosmwasm_std::{Addr, Coin, Decimal};
+use cosmwasm_std::{Addr, Coin};
 
 use crate::state::{Config, SwapOrder};
 
-/// This struct contains required variables to instantiate a new market.
+/// This structure contains required variables to instantiate a new market.
 #[cw_serde]
 pub struct InstantiateMsg {
     /// Owner of the smart contract.
@@ -13,14 +13,16 @@ pub struct InstantiateMsg {
 /// This enum describes available contract's execution messages.
 #[cw_serde]
 pub enum ExecuteMsg {
-    /// Allows to update the contract's configuration. Only owner can update.
+    /// Allows to update the contract's configuration.
+    /// Only owner can update.
     UpdateConfig {
         /// New contract owner.
         new_owner: String,
     },
     /// Allows a user to create a swap order. The execution of the order
-    /// requires the user to have grant a `ContractExecutionAuthorization`
-    /// to this smart contract via the `x/authz` Cosmos SDK module.
+    /// requires the user to have granted a `ContractExecutionAuthorization`
+    /// to this smart contract via the `x/authz` Cosmos SDK module with the
+    /// allowance to spend `coin_in`.
     CreateSwapOrder {
         /// Coin to send.
         coin_in: Coin,
@@ -31,8 +33,8 @@ pub enum ExecuteMsg {
         /// Timestamp after which the deal expires in seconds.
         timeout: u64,
     },
-    /// Allows a user to match an existing swap order. The function requries
-    /// to sent along with the transaction required funds.
+    /// Allows a user to accept an existing swap order. The function requires
+    /// to send along with the transaction required funds.
     AcceptSwapOrder {
         /// Identifier of the swap order the user wants to match.
         order_id: u64,
@@ -60,7 +62,7 @@ pub enum QueryMsg {
     #[returns(Config)]
     Config {},
     // TODO: in both query below add a flag to specify if
-    // timedout orders are wanted. (how to cancel otherwise?)
+    // timedout orders are wanted. (how to cancel expired ones otherwise?)
     #[returns(AllSwapOrdersResponse)]
     /// Retrieve all active swap orders.
     AllSwapOrders {},
@@ -69,11 +71,13 @@ pub enum QueryMsg {
     SwapOrdersByMaker { maker: String },
 }
 
+/// Data structure returned from the `AllSwapOrders` query.
 #[cw_serde]
 pub struct AllSwapOrdersResponse {
     pub orders: Vec<((Addr, u64), SwapOrder)>,
 }
 
+/// Data structure returned from the `SwapOrdersByMaker` query.
 #[cw_serde]
 pub struct SwapOrdersByMakerResponse {
     pub orders: Vec<(u64, SwapOrder)>,
