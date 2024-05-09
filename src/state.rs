@@ -72,6 +72,8 @@ pub struct OrderPointer {
     pub order_id: u64,
     /// Address of the maker of the order.
     pub maker: Addr,
+    /// Address of the taker of the order.
+    pub taker: Addr,
 }
 
 /// Data structure used to store the number of created deals.

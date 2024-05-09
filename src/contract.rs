@@ -190,7 +190,7 @@ pub mod execute {
             }
         }
 
-        order.taker = Some(info.sender);
+        order.taker = Some(info.sender.clone());
         order.status = OrderStatus::Accepted;
 
         SWAP_ORDERS.save(deps.storage, (&maker, order_id), &order)?;
@@ -203,6 +203,7 @@ pub mod execute {
             deps.storage,
             &OrderPointer {
                 maker: maker.clone(),
+                taker: info.sender,
                 order_id,
             },
         )?;
@@ -354,7 +355,7 @@ pub mod query {
 }
 
 pub mod reply {
-    use cosmwasm_std::{DepsMut, Response};
+    use cosmwasm_std::{BankMsg, Coin, DepsMut, Response};
 
     use crate::error::ContractError;
     use crate::state::{OrderPointer, OrderStatus, ORDER_POINTER, SWAP_ORDERS};
@@ -364,20 +365,33 @@ pub mod reply {
     /// NOTE: currently all order status are not used but still included to
     /// easily extend functionalities in the future.
     pub fn reply_confirm_order(deps: DepsMut) -> Result<Response, ContractError> {
-        let OrderPointer { order_id, maker } = ORDER_POINTER.load(deps.storage)?;
+        let OrderPointer {
+            order_id,
+            maker,
+            taker,
+        } = ORDER_POINTER.load(deps.storage)?;
+
+        let mut coin_out = Coin::default();
         SWAP_ORDERS.update(
             deps.storage,
             (&maker, order_id),
             |swap_order| match swap_order {
                 Some(mut order) => {
                     order.status = OrderStatus::Failed;
+                    coin_out = order.coin_out.clone();
                     Ok(order)
                 }
                 None => Err(ContractError::Unauthorized),
             },
         )?;
         ORDER_POINTER.remove(deps.storage);
+        let refund_msg = BankMsg::Send {
+            to_address: taker.to_string(),
+            amount: vec![coin_out],
+        };
+
         Ok(Response::new()
+            .add_message(refund_msg)
             .add_attribute("action", "reply")
             .add_attribute("reason", "order_execution_failed"))
     }

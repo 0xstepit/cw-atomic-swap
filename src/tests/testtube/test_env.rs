@@ -1,21 +1,13 @@
-use std::{collections::HashMap, path::PathBuf};
+#![cfg(not(tarpaulin_include))]
+use std::collections::HashMap;
 
-use crate::{
-    error::ContractError,
-    msg::{ExecuteMsg, InstantiateMsg, QueryMsg},
-};
+use crate::msg::{ExecuteMsg, InstantiateMsg, QueryMsg};
 
-use cosmwasm_std::{to_json_binary, Coin};
-use osmosis_std::types::{
-    cosmos::bank::v1beta1::QueryAllBalancesRequest,
-    cosmwasm::wasm::v1::MsgExecuteContractResponse,
-    osmosis::cosmwasmpool::v1beta1::{
-        ContractInfoByPoolIdRequest, ContractInfoByPoolIdResponse, MsgCreateCosmWasmPool,
-    },
-};
+use cosmwasm_std::Coin;
+use osmosis_std::types::cosmwasm::wasm::v1::MsgExecuteContractResponse;
 
 use osmosis_test_tube::{
-    Account, Bank, Module, OsmosisTestApp, RunnerError, RunnerExecuteResult, RunnerResult,
+    Account, Module, OsmosisTestApp, RunnerError, RunnerExecuteResult, RunnerResult,
     SigningAccount, Wasm,
 };
 use serde::de::DeserializeOwned;
@@ -29,48 +21,9 @@ pub struct TestEnv<'a> {
     pub accounts: HashMap<String, SigningAccount>,
 }
 
-impl<'a> TestEnv<'a> {
-    pub fn assert_account_balances(
-        &self,
-        account: &str,
-        expected_balances: Vec<Coin>,
-        ignore_denoms: Vec<&str>,
-    ) {
-        let account_balances: Vec<Coin> = Bank::new(self.app)
-            .query_all_balances(&QueryAllBalancesRequest {
-                address: self.accounts.get(account).unwrap().address(),
-                pagination: None,
-            })
-            .unwrap()
-            .balances
-            .into_iter()
-            .map(|coin| Coin::new(coin.amount.parse().unwrap(), coin.denom))
-            .filter(|coin| !ignore_denoms.contains(&coin.denom.as_str()))
-            .collect();
-
-        assert_eq!(account_balances, expected_balances);
-    }
-
-    pub fn assert_contract_balances(&self, expected_balances: &[Coin]) {
-        let contract_balances: Vec<Coin> = Bank::new(self.app)
-            .query_all_balances(&QueryAllBalancesRequest {
-                address: self.contract.contract_addr.clone(),
-                pagination: None,
-            })
-            .unwrap()
-            .balances
-            .into_iter()
-            .map(|coin| Coin::new(coin.amount.parse().unwrap(), coin.denom))
-            .collect();
-
-        assert_eq!(contract_balances, expected_balances);
-    }
-}
-
 pub struct TestEnvBuilder {
     account_balances: HashMap<String, Vec<Coin>>,
     instantiate_msg: Option<InstantiateMsg>,
-    admin: Option<String>,
 }
 
 impl TestEnvBuilder {
@@ -78,19 +31,12 @@ impl TestEnvBuilder {
         Self {
             account_balances: HashMap::new(),
             instantiate_msg: None,
-            admin: None,
         }
     }
 
     /// Allows to set the init message for the contract.
     pub fn with_instantiate_msg(mut self, msg: InstantiateMsg) -> Self {
         self.instantiate_msg = Some(msg);
-        self
-    }
-
-    /// Defines the admin for contract instantiation.
-    pub fn with_admin(mut self, admin: &str) -> Self {
-        self.admin = Some(admin.to_string());
         self
     }
 
@@ -147,14 +93,6 @@ pub struct AtomicSwapContract<'a> {
 }
 
 impl<'a> AtomicSwapContract<'a> {
-    pub fn new(app: &'a OsmosisTestApp, code_id: u64, contract_addr: String) -> Self {
-        Self {
-            app,
-            code_id,
-            contract_addr,
-        }
-    }
-
     /// Store and instantiate the atomic swap market.
     pub fn store_and_instantiate(
         app: &'a OsmosisTestApp,
@@ -167,15 +105,11 @@ impl<'a> AtomicSwapContract<'a> {
         // let wasm_byte_code =
         //     std::fs::read("./target/wasm32-unknown-unknown/release/cw_atomic_swap.wasm").unwrap();
 
-        println!("Storing atomic swap byte code...");
-
         let code_id = wasm
             .store_code(&wasm_byte_code, None, signer)
             .unwrap()
             .data
             .code_id;
-
-        println!("Instantiating atomic swap contract...");
 
         let market_address = wasm
             .instantiate(
@@ -204,8 +138,6 @@ impl<'a> AtomicSwapContract<'a> {
         funds: &[Coin],
         signer: &SigningAccount,
     ) -> RunnerExecuteResult<MsgExecuteContractResponse> {
-        println!("Executing atomic swap contract...");
-
         let wasm = Wasm::new(self.app);
         wasm.execute(&self.contract_addr, msg, funds, signer)
     }
@@ -218,18 +150,4 @@ impl<'a> AtomicSwapContract<'a> {
         let wasm = Wasm::new(self.app);
         wasm.query(&self.contract_addr, msg)
     }
-}
-
-pub fn assert_contract_err(expected: ContractError, actual: RunnerError) {
-    match actual {
-        RunnerError::ExecuteError { msg } => {
-            if !msg.contains(&expected.to_string()) {
-                panic!(
-                    "assertion failed:\n\n  must contain \t: \"{}\",\n  actual \t: \"{}\"\n",
-                    expected, msg
-                )
-            }
-        }
-        _ => panic!("unexpected error, expect execute error but got: {}", actual),
-    };
 }

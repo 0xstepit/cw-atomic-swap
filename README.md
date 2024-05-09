@@ -18,16 +18,29 @@ it makes use of the `x/authz` module to grant authorization to the contract to s
 
 ## How it works
 
-The process to perform a swap of coins between two users is the following:
+The process to perform a swap of coins between two users is below described.
 
-1. The Maker send a multi-message transaction to:
-    - authorize the contract to execute a
+#### Create an order
+
+1. The Maker send a message to authorize the contract to execute a
 smart contract call on their behalf with the possibility to send coins.
-    - create a new order in the smart contract.
-2. The Taker accept an order by sending the required amount of coins.
-3. The contract receives the Taker request to perform the swap and send a message to the
-`x/authz` module to call into itself sending the required amount of coins on behalf of the Maker.
-4. The smart contract send the Taker's funds to the Maker, and the Maker's funds to the Taker.
+2. `x/authz` store the authorization with the contract as the `grantee` and the Maker as the `granter`.
+3. The Maker send a message to `cw-atomic-swap` to create an order.
+4. The contract store the order info without requesting tokens to the Maker.
+
+Please, note that (1.) and (3.) can be send with a multi-message transaction.
+
+#### Accept an order
+
+5. The Taker accept an order by sending to the contract the required amount of coins.
+6. The contract receives the Taker request to perform the swap and send a message to the
+`x/authz` to execute a contract call.
+7. `x/authz` send back to the contract a message, along with authorized funds, on behalf of the Maker to
+complete the order.
+8. The smart contract send the Taker's funds to the Maker
+9. The smart contract send the Maker's funds to the Taker.
+10. The smart contact update the order status to completed.
+
 
 The following sequence diagram describes the process of swap order creation and execution:
 
@@ -51,7 +64,7 @@ sequenceDiagram
     o ->> sc: ConfirmSwapOrder with funds on behalf of Maker
 	sc ->> m: Send Taker funds
 	sc ->> t: Send Maker funds
-	sc->>sc: Update offer as completed
+	sc->>sc: Update order as completed
 
 ```
 
@@ -219,6 +232,20 @@ just schema
 ```
 
 ## Considerations
+
+`cw-atomic-swap` is a just a proof of concept and this section describes possible improvements and future works:
+
+- Improve the quality of tests. At the moment just basic scenarios and the main contract flow have been tested. Without
+test-tube tests, test coverage is $84.4%$.
+- Improve storage layout to access an order just through the index using `IndexedMaps or other solutions.
+- Allow users to cancel offers.
+- Tests if due to the atomicity of the execution the code can be cleaned removing some of the validations.
+- Give a sense to the config structure allowing to specify a fee or pause the market.
+- Allow users to swap multiple coins.
+- Tests a factory pattern to see if instantiating a different market for every token can improve UX.
+- Support IBC to implement the full ICS20.
+
+Other TODOs have been left in the contract to mark other possible improvements.
 
 ## License
 

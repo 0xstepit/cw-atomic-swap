@@ -238,7 +238,7 @@ fn test_accept_swap_order() {
             &SwapOrder {
                 coin_in: Coin::new(1_000, "uatom"),
                 coin_out: Coin::new(1_000, "usdc"),
-                taker: Some(taker_addr),
+                taker: Some(taker_addr.clone()),
                 timeout: 10 + env.block.time.seconds(),
                 status: OrderStatus::Open,
             },
@@ -278,6 +278,7 @@ fn test_accept_swap_order() {
         order_pointer,
         OrderPointer {
             maker: maker_addr,
+            taker: taker_addr,
             order_id: 0,
         }
     );
@@ -650,6 +651,7 @@ fn test_replies() {
             &OrderPointer {
                 order_id: 0,
                 maker: maker_addr.clone(),
+                taker: taker_addr.clone(),
             },
         )
         .unwrap();
@@ -695,6 +697,7 @@ fn test_replies_handling_errors() {
             &OrderPointer {
                 order_id: 1,
                 maker: maker_addr.clone(),
+                taker: taker_addr.clone(),
             },
         )
         .unwrap();

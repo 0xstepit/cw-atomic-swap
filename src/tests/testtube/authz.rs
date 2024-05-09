@@ -1,3 +1,4 @@
+#![cfg(not(tarpaulin_include))]
 use osmosis_std::types::cosmos::authz::v1beta1::{
     MsgExec, MsgExecResponse, MsgGrant, MsgGrantResponse, QueryGranteeGrantsRequest,
     QueryGranteeGrantsResponse, QueryGranterGrantsRequest, QueryGranterGrantsResponse,
