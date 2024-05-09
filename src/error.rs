@@ -9,11 +9,8 @@ pub enum ContractError {
     #[error("unauthorized")]
     Unauthorized,
 
-    #[error("first coin {first_coin} is equal to second coin {second_coin}")]
-    SameCoinError {
-        first_coin: String,
-        second_coin: String,
-    },
+    #[error("first denom is equal to second denom: {denom}")]
+    SameDenomError { denom: String },
 
     #[error("wrong number of coins: accepted {accepted}, received {received}")]
     FundsError { accepted: u64, received: u64 },
@@ -21,8 +18,8 @@ pub enum ContractError {
     #[error("this method does not accept coins")]
     CoinNotAllowed {},
 
-    #[error("swap order not available: {status}")]
-    SwapOrderNotAvailable { status: String },
+    #[error("swap order not available: status {status}, expiration block time {expiration}")]
+    SwapOrderNotAvailable { status: String, expiration: u64 },
 
     #[error(
         "sent wrong coins {sent_denom}{sent_amount}, expected {expected_amount}{expected_denom}"

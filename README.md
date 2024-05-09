@@ -1,11 +1,12 @@
 # CW-ATOMIC-SWAP
 
+![image](./assets/cw-atomic-swap.png)
+
 <p align="center" width="100%">
     <img  height="20" src="https://github.com/0xstepit/cw-atomic-swap/actions/workflows/lint.yml/badge.svg">
     <img height="20" src="https://github.com/0xstepit/cw-atomic-swap/actions/workflows/test.yml/badge.svg">
 </p>
 
-![image](./assets/cw-atomic-swap.png)
 `cw-atomic-swap` is a simplified implementation of the [ICS-100](https://github.com/cosmos/ibc/tree/main/spec/app/ics-100-atomic-swap) that
 allows two users on the same chain to exchange tokens with an implicit agreement on the the relative price of the two swapped assets.
 The contract is a simplified version of ICS-100 because it is made to work on a single and does not allow the execution of trades via IBC. The

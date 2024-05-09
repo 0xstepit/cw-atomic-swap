@@ -8,6 +8,7 @@ use crate::{
 
 const OWNER: &str = "0xstepit000";
 
+// TODO: this can be removed
 // Creates a market contract.
 pub fn atomic_swap_market_contract() -> Box<dyn Contract<Empty>> {
     let contract = ContractWrapper::new(

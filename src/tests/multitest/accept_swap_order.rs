@@ -11,6 +11,7 @@ use crate::{error::ContractError, msg::ExecuteMsg};
 
 const OWNER: &str = "0xstepit000";
 
+// TODO: add checks for correct and failing submessage
 // Creates a market contract.
 pub fn atomic_swap_market_contract() -> Box<dyn Contract<Empty>> {
     let contract = ContractWrapper::new(

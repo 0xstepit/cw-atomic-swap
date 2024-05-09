@@ -11,6 +11,7 @@ use std::fmt::Debug;
 #[derive(Default)]
 pub struct CustomStargate {}
 
+// TODO:: add possibilities of failing and correct case
 impl Stargate for CustomStargate {
     fn execute<ExecC, QueryC>(
         &self,
