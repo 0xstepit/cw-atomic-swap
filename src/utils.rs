@@ -1,5 +1,3 @@
-use std::error::Error;
-
 use cosmwasm_std::{Coin, StdError, StdResult};
 use osmosis_std::shim::Any;
 use osmosis_std::types::cosmos::authz::v1beta1::MsgExec;
@@ -35,7 +33,6 @@ pub fn create_authz_encoded_message(
     maker: String,
     coin: Coin,
 ) -> Result<MsgExec, ContractError> {
-    // FIX: handle the error.
     let update_name_msg = ExecuteMsg::ConfirmSwapOrder {
         order_id,
         maker: maker.clone(),

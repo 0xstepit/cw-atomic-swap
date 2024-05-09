@@ -1,9 +1,8 @@
 use cosmwasm_std::{Addr, Coin, Empty, Uint128};
 use cw_multi_test::{App, BankSudo, Contract, ContractWrapper, Executor, SudoMsg};
 
-use crate::{
-    error::ContractError,
-    msg::{AllSwapOrdersResponse, ExecuteMsg, InstantiateMsg, QueryMsg, SwapOrdersByMakerResponse},
+use crate::msg::{
+    AllSwapOrdersResponse, ExecuteMsg, InstantiateMsg, QueryMsg, SwapOrdersByMakerResponse,
 };
 
 pub fn atomic_swap_market_contract() -> Box<dyn Contract<Empty>> {

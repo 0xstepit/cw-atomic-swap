@@ -1,6 +1,5 @@
-use cosmwasm_std::{Addr, Coin, Coins, Empty, Uint128};
+use cosmwasm_std::{Addr, Coin, Empty, Uint128};
 use cw_multi_test::{AppBuilder, BankSudo, Contract, ContractWrapper, Executor, SudoMsg};
-use test_tube::{Bank, Wasm};
 
 use crate::msg::ExecuteMsg;
 use crate::msg::{AllSwapOrdersResponse, InstantiateMsg, QueryMsg};
