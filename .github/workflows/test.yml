@@ -6,7 +6,7 @@ name: Test
 
 jobs:
   test:
-    name: Test Suite
+    name: Test
     runs-on: ubuntu-latest
     steps:
       - name: Checkout sources
@@ -16,22 +16,11 @@ jobs:
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: 1.78.0
-          target: wasm32-unknown-unknown
+          toolchain: stable
           override: true
 
-      - name: Run unit tests
+      - name: Run cargo test
         uses: actions-rs/cargo@v1
         with:
-          command: unit-test
-          args: --locked
-        env:
-          RUST_BACKTRACE: 1
-
-      - name: Compile WASM contract
-        uses: actions-rs/cargo@v1
-        with:
-          command: wasm
-          args: --locked
-        env:
-          RUSTFLAGS: "-C link-arg=-s"
+          command: test
+          args: --locked --tests
