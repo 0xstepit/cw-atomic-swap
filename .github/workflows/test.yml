@@ -6,7 +6,7 @@ name: Test
 
 jobs:
   test:
-    name: Test
+    name: Run
     runs-on: ubuntu-latest
     steps:
       - name: Checkout sources

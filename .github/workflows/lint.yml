@@ -6,7 +6,7 @@ name: Lint
 
 jobs:
   lints:
-    name: Lints
+    name: Clippy & Fmt
     runs-on: ubuntu-latest
     steps:
       - name: Checkout sources
