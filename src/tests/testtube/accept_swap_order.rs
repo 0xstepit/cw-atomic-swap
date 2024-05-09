@@ -1,6 +1,6 @@
 #![cfg(not(tarpaulin_include))]
 
-use cosmwasm_std::Coin;
+use cosmwasm_std::{Addr, Coin};
 use osmosis_std::shim::{Any, Timestamp};
 use osmosis_std::types::cosmos::authz::v1beta1::{
     Grant, GrantAuthorization, MsgGrant, QueryGranteeGrantsRequest,
@@ -17,6 +17,7 @@ use test_tube::cosmrs::proto::prost::Message;
 use test_tube::Account;
 
 use crate::msg::{AllSwapOrdersResponse, ExecuteMsg, InstantiateMsg, QueryMsg};
+use crate::state::SwapOrder;
 use crate::tests::testtube::authz::Authz;
 use crate::tests::testtube::test_env::{TestEnvBuilder, WEEK};
 
@@ -33,7 +34,6 @@ fn test_accept_swap_order_fails() {
         .with_instantiate_msg(InstantiateMsg { owner: None })
         .build(&app);
 
-    let market_address = t.contract.contract_addr.clone();
     let maker = t.accounts.get("maker").unwrap();
     let taker = t.accounts.get("taker").unwrap();
 
@@ -80,7 +80,11 @@ fn test_accept_swap_order_fails() {
     t.contract.execute(&create_order_msg, &[], maker).unwrap();
 
     let orders: AllSwapOrdersResponse = t.contract.query(&QueryMsg::AllSwapOrders {}).unwrap();
-    assert_eq!(orders.orders.len(), 1);
+    assert_eq!(
+        orders.orders.len(),
+        1,
+        "expect to have the swap order stored"
+    );
 
     let accept_order_msg = ExecuteMsg::AcceptSwapOrder {
         order_id: 0,
@@ -204,7 +208,11 @@ fn test_accept_swap_order() {
         })
         .unwrap();
 
-    assert_eq!(response.grants.len(), 1);
+    assert_eq!(
+        response.grants.len(),
+        1,
+        "expect to have the grant registered"
+    );
     assert_eq!(
         response.grants,
         vec![GrantAuthorization {
@@ -216,7 +224,8 @@ fn test_accept_swap_order() {
                 value: buf.clone(),
             }),
             expiration: Some(expiration.clone()),
-        },]
+        },],
+        "expected a different grant stored"
     );
 
     let response = bank
@@ -260,8 +269,13 @@ fn test_accept_swap_order() {
     t.contract.execute(&create_order_msg, &[], maker).unwrap();
 
     let orders: AllSwapOrdersResponse = t.contract.query(&QueryMsg::AllSwapOrders {}).unwrap();
-    assert_eq!(orders.orders.len(), 1);
+    assert_eq!(
+        orders.orders.len(),
+        1,
+        "expect to have one swap order active"
+    );
 
+    let block_seconds = t.app.get_block_time_seconds() as u64;
     let accept_order_msg = ExecuteMsg::AcceptSwapOrder {
         order_id: 0,
         maker: maker.address().to_string(),
@@ -281,7 +295,8 @@ fn test_accept_swap_order() {
         OsmosisCoin {
             amount: 1_000u128.to_string(),
             denom: "usdc".to_string(),
-        }
+        },
+        "expcted the maker to have received taker funds"
     );
     let response = bank
         .query_balance(&QueryBalanceRequest {
@@ -294,6 +309,20 @@ fn test_accept_swap_order() {
         OsmosisCoin {
             amount: 1_000u128.to_string(),
             denom: "uatom".to_string(),
-        }
+        },
+        "expected the taker to have received maker funds"
+    );
+
+    let orders: AllSwapOrdersResponse = t.contract.query(&QueryMsg::AllSwapOrders {}).unwrap();
+    assert_eq!(
+        orders.orders[0].1,
+        SwapOrder {
+            coin_in: Coin::new(1_000, "uatom"),
+            coin_out: Coin::new(1_000, "usdc"),
+            taker: Some(Addr::unchecked(taker.address())),
+            timeout: 10 + block_seconds,
+            status: crate::state::OrderStatus::Confirmed,
+        },
+        "expect to have one swap order active"
     );
 }

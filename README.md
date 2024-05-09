@@ -1,6 +1,4 @@
-# CW-ATOMIC-SWAP
-
-![image](./assets/cw-atomic-swap.png)
+![image](./assets/cw-atomic-swap2.png)
 
 <p align="center" width="100%">
     <img  height="20" src="https://github.com/0xstepit/cw-atomic-swap/actions/workflows/lint.yml/badge.svg">
