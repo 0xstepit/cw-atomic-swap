@@ -33,10 +33,23 @@ pub enum ContractError {
 
     #[error("maker cannot accept its own order")]
     SenderIsMaker {},
+
+    #[error("unable to encode json")]
+    JsonEncodeError(),
 }
 
 #[derive(Error, Debug)]
 pub enum EncodeError {
     #[error("unable to encode json")]
     JsonEncodeError(#[from] serde_json::Error),
+}
+
+impl From<EncodeError> for ContractError {
+    fn from(err: EncodeError) -> Self {
+        match err {
+            EncodeError::JsonEncodeError(_json_err) => {
+                ContractError::JsonEncodeError() // Convert to StdError
+            }
+        }
+    }
 }

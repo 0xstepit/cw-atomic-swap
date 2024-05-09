@@ -34,7 +34,7 @@ pub fn create_authz_encoded_message(
     order_id: u64,
     maker: String,
     coin: Coin,
-) -> MsgExec {
+) -> Result<MsgExec, ContractError> {
     // FIX: handle the error.
     let update_name_msg = ExecuteMsg::ConfirmSwapOrder {
         order_id,
@@ -59,13 +59,14 @@ pub fn create_authz_encoded_message(
     )
     .unwrap();
 
-    MsgExec {
+    Ok(MsgExec {
         grantee: contract,
         msgs: vec![Any {
-            type_url: "/cosmwasm.wasm.v1.MsgExecuteContract".to_string(),
+            // type_url: "/cosmwasm.wasm.v1.MsgExecuteContract".to_string(),
+            type_url: MsgExecuteContract::TYPE_URL.to_string(),
             value: exec_contract_buf.clone(),
         }],
-    }
+    })
 }
 
 /// Check that the two coins are the same or raise an error.

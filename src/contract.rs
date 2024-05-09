@@ -3,8 +3,6 @@ use cosmwasm_std::{
     StdError, StdResult,
 };
 
-use osmosis_std::types::cosmos::base::v1beta1::Coin as OsmosisCoin;
-
 use crate::{
     error::ContractError,
     msg::{ExecuteMsg, InstantiateMsg, QueryMsg},
@@ -83,14 +81,9 @@ pub fn reply(deps: DepsMut, _env: Env, msg: Reply) -> Result<Response, ContractE
 }
 
 pub mod execute {
-    use cosmwasm_std::{ensure, Addr, BankMsg, Coin, CosmosMsg, StdError, SubMsg};
-    use osmosis_std::shim::Any;
+    use cosmwasm_std::{ensure, Addr, BankMsg, Coin, CosmosMsg, SubMsg};
     use osmosis_std::types::cosmos::authz::v1beta1::MsgExec;
-    use osmosis_std::types::cosmwasm::wasm::v1::MsgExecuteContract;
-    use prost::Message;
-    // use test_tube::cosmrs::proto::ibc::core::channel::v1::Order;
 
-    use crate::error::EncodeError;
     use crate::state::{next_id, OrderPointer, OrderStatus, SwapOrder, ORDER_POINTER, SWAP_ORDERS};
     use crate::utils::{
         check_correct_coins, create_authz_encoded_message, validate_coins_number,
@@ -221,9 +214,9 @@ pub mod execute {
             order_id,
             maker.to_string(),
             order.coin_in,
-        );
+        )?;
         let authz_msg: CosmosMsg = CosmosMsg::Stargate {
-            type_url: "/cosmos.authz.v1beta1.MsgExec".to_string(),
+            type_url: MsgExec::TYPE_URL.to_string(),
             value: msg_exec.into(),
         };
         // TODO: reply on error to take action in case in which the maker
