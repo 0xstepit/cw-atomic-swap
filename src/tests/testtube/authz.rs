@@ -1,8 +1,7 @@
 #![cfg(not(tarpaulin_include))]
 use osmosis_std::types::cosmos::authz::v1beta1::{
     MsgExec, MsgExecResponse, MsgGrant, MsgGrantResponse, QueryGranteeGrantsRequest,
-    QueryGranteeGrantsResponse, QueryGranterGrantsRequest, QueryGranterGrantsResponse,
-    QueryGrantsRequest, QueryGrantsResponse,
+    QueryGranteeGrantsResponse,
 };
 use test_tube::{fn_execute, fn_query};
 
@@ -33,13 +32,5 @@ where
 
     fn_query! {
         pub query_grantee_grants ["/cosmos.authz.v1beta1.Query/GranteeGrants"]: QueryGranteeGrantsRequest => QueryGranteeGrantsResponse
-    }
-
-    fn_query! {
-        pub query_granter_grants ["/cosmos.authz.v1beta1.Query/GranterGrants"]: QueryGranterGrantsRequest => QueryGranterGrantsResponse
-    }
-
-    fn_query! {
-        pub query_grants ["/cosmos.authz.v1beta1.Query/Grants"]: QueryGrantsRequest => QueryGrantsResponse
     }
 }
