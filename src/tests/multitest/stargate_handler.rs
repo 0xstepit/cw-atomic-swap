@@ -28,9 +28,9 @@ impl Stargate for CustomStargate {
         // We trigger the error based on the block since at
         // this point the sender is always the contract.
         if block.height != 1 {
-            return Ok(AppResponse::default());
+            Ok(AppResponse::default())
         } else {
-            return Err(anyhow::anyhow!("Failed to use auhtz"));
+            Err(anyhow::anyhow!("Failed to use auhtz"))
         }
     }
 }

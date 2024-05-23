@@ -13,6 +13,7 @@ use osmosis_std::types::cosmwasm::wasm::v1::{
 use osmosis_std::types::cosmos::base::v1beta1::Coin as OsmosisCoin;
 
 use osmosis_test_tube::{Bank, Module, OsmosisTestApp};
+use schemars::JsonSchema;
 use test_tube::cosmrs::proto::prost::Message;
 use test_tube::Account;
 
